@@ -33,22 +33,38 @@ class DeudoresApp(App):
     title="Sistema de Deudores"
     def build(self):
         Window.clearcolor=BG
-        Window.rotation=0
         self.dbpath=os.path.join(self.user_data_dir,"sistema_deudores.db")
         self.db=sqlite3.connect(self.dbpath); self.db.row_factory=sqlite3.Row
         self.init_db()
-        root=BoxLayout(orientation="vertical", spacing=dp(6), padding=dp(10))
-        header=BoxLayout(size_hint_y=None,height=dp(48),padding=[dp(8),0])
-        header.add_widget(Label(text="[b]SISTEMA DE DEUDORES[/b]",markup=True,color=NAVY,font_size="20sp",halign="left"))
-        header.add_widget(Label(text="GESTIÓN LOCAL",color=MUTED,font_size="11sp",size_hint_x=.35))
+        root=BoxLayout(orientation="vertical", spacing=0, padding=dp(4))
+        header=BoxLayout(orientation="vertical", size_hint_y=None, height=dp(70),
+                         padding=[dp(12),dp(8)], spacing=dp(2))
+        with header.canvas.before:
+            Color(*NAVY); header_bg=RoundedRectangle(radius=[dp(14),dp(14),0,0])
+        header.bind(pos=lambda w,v: setattr(header_bg,"pos",v),
+                    size=lambda w,v: setattr(header_bg,"size",v))
+        title=Label(text="[b]SISTEMA DE DEUDORES[/b]",markup=True,color=WHITE,
+                    font_size="18sp",halign="left",valign="middle",size_hint_y=.55)
+        title.bind(size=lambda w,v: setattr(w,"text_size",v))
+        subtitle=Label(text="GESTIÓN DE CLIENTES Y CUENTAS",color=(.78,.88,.90,1),
+                       font_size="11sp",halign="left",valign="middle",size_hint_y=.45)
+        subtitle.bind(size=lambda w,v: setattr(w,"text_size",v))
+        header.add_widget(title); header.add_widget(subtitle)
         root.add_widget(header)
         self.body=BoxLayout()
         root.add_widget(self.body)
-        nav=GridLayout(cols=4,size_hint_y=None,height=dp(58),spacing=dp(5))
-        for key,label in [("panel","⌂  Panel"),("clientes","♙  Clientes"),("ventas","▤  Ventas"),("pagos","＋  Pagos")]:
-            b=Button(text=label,background_normal="",background_color=TEAL,color=WHITE,font_size="14sp")
+        nav=GridLayout(cols=4,size_hint_y=None,height=dp(58),spacing=dp(2),padding=[dp(2),dp(3)])
+        with nav.canvas.before:
+            Color(*NAVY); nav_bg=RoundedRectangle(radius=[0,0,dp(14),dp(14)])
+        nav.bind(pos=lambda w,v: setattr(nav_bg,"pos",v),size=lambda w,v: setattr(nav_bg,"size",v))
+        self.nav_buttons={}
+        for key,icon,label in [("panel","⌂","Panel"),("clientes","♧","Clientes"),
+                               ("ventas","▣","Ventas"),("pagos","▤","Pagos")]:
+            b=Button(text=f"{icon}\\n{label}",background_normal="",background_color=(0,0,0,0),
+                     color=WHITE,font_size="12sp",halign="center",valign="middle")
+            b.bind(size=lambda w,v: setattr(w,"text_size",v))
             b.bind(on_release=lambda btn,k=key:self.show(k))
-            nav.add_widget(b)
+            nav.add_widget(b); self.nav_buttons[key]=b
         root.add_widget(nav)
         self.show("panel")
         return root
@@ -100,8 +116,10 @@ class DeudoresApp(App):
         b.bind(on_release=lambda *_:fn()); return b
     def show(self,tab):
         self.body.clear_widgets()
-        sc=ScrollView(do_scroll_x=False)
-        content=BoxLayout(orientation="vertical",padding=dp(8),spacing=dp(8),size_hint_y=None)
+        for k,b in self.nav_buttons.items():
+            b.background_color=(.02,.12,.14,1) if k==tab else (0,0,0,0)
+        sc=ScrollView(do_scroll_x=False,bar_width=dp(3))
+        content=BoxLayout(orientation="vertical",padding=[dp(8),dp(10)],spacing=dp(8),size_hint_y=None)
         content.bind(minimum_height=content.setter("height"))
         sc.add_widget(content); self.body.add_widget(sc)
         if tab=="panel": self.panel(content)
@@ -109,31 +127,39 @@ class DeudoresApp(App):
         elif tab=="ventas": self.records(content,"sales")
         else:self.records(content,"payments")
     def add_metric(self,parent,title,value,color=TEAL):
-        card=Card(size_hint_y=None,height=dp(88))
-        card.add_widget(self.label(title,11,MUTED,True)); card.add_widget(self.label(value,21,color,True)); parent.add_widget(card)
+        card=Card(size_hint_y=None,height=dp(76),padding=dp(11),spacing=dp(3))
+        card.add_widget(self.label(title,10,MUTED))
+        card.add_widget(self.label(value,19,color,True))
+        parent.add_widget(card)
     def panel(self,p):
-        p.add_widget(self.label("Resumen general",22,NAVY,True))
         rows=self.rows()
         sales=self.db.execute("SELECT COALESCE(SUM(amount),0) FROM sales").fetchone()[0]
         pays=self.db.execute("SELECT COALESCE(SUM(amount),0) FROM payments").fetchone()[0]
         debt=sum(max(0,float(x["balance"])) for x in rows)
-        grid=GridLayout(cols=2,spacing=dp(8),size_hint_y=None,height=dp(190))
-        for title,val,col in [("VENTAS ACUMULADAS",money(sales),TEAL),("PAGOS RECIBIDOS",money(pays),GREEN),("SALDO PENDIENTE",money(debt),RED),("CLIENTES",len(rows),NAVY)]:
+        grid=GridLayout(cols=2,spacing=dp(7),size_hint_y=None,height=dp(159))
+        for title,val,col in [("VENTAS",money(sales),NAVY),("PAGOS",money(pays),GREEN),
+                              ("DEUDA",money(debt),RED),("CLIENTES",len(rows),NAVY)]:
             self.add_metric(grid,title,val,col)
         p.add_widget(grid)
-        p.add_widget(self.label("Top 5 deudores",17,NAVY,True))
         debtors=sorted([x for x in rows if x["balance"]>0],key=lambda x:-x["balance"])[:5]
+        card=Card(size_hint_y=None,height=dp(142),padding=dp(12),spacing=dp(3))
+        card.add_widget(self.label("Top 5 deudores",15,NAVY,True))
         for i in range(5):
-            if i<len(debtors): t=f"{i+1}. {debtors[i]['name']}     {money(debtors[i]['balance'])}"
-            else:t=f"{i+1}. —"
-            p.add_widget(self.label(t,14,RED if i<len(debtors) else MUTED,size_hint_y=None,height=dp(28)))
-        p.add_widget(self.label("Estado de cuentas",17,NAVY,True))
+            if i<len(debtors):
+                t=f"{i+1:02d} · {debtors[i]['name']} — {money(debtors[i]['balance'])}"
+                col=RED
+            else:
+                t=f"{i+1:02d} · —"; col=MUTED
+            card.add_widget(self.label(t,12,col,size_hint_y=None,height=dp(19)))
+        p.add_widget(card)
         owing=sum(x["balance"]>0 for x in rows); ok=len(rows)-owing
-        p.add_widget(self.label(f"Con deuda: {owing}       Al día: {ok}",14,GREEN,True))
-        for c in rows:
-            if c["balance"]>0:p.add_widget(self.label(f"• {c['name']}  — debe {money(c['balance'])}",13,RED,size_hint_y=None,height=dp(25)))
+        status=Card(size_hint_y=None,height=dp(76))
+        status.add_widget(self.label("Estado de cuentas",14,NAVY,True))
+        status.add_widget(self.label(f"Con deuda: {owing}     ·     Al día: {ok}",12,GREEN))
+        p.add_widget(status)
         p.add_widget(self.button("+ Registrar venta",lambda:self.form("sale")))
         p.add_widget(self.button("+ Registrar pago",lambda:self.form("payment")))
+
     def clients(self,p):
         p.add_widget(self.label("Clientes",22,NAVY,True))
         p.add_widget(self.button("+ Nuevo cliente",lambda:self.form("client")))

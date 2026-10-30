@@ -1,6 +1,6 @@
 # Sistema de Deudores para Android
 
-Aplicación Android en orientación horizontal, con navegación inferior: Panel, Clientes, Ventas y Pagos. Mantiene el estilo turquesa y una base SQLite local.
+Aplicación Android en orientación vertical, con navegación inferior: Panel, Clientes, Ventas y Pagos. Mantiene el estilo turquesa y una base SQLite local.
 
 ## Generar el APK (sin instalar Android Studio en Windows)
 
